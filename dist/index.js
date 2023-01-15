@@ -188,18 +188,18 @@ function MIDIProvider(props) {
      * @function addMIDIInput
      * @param {MIDIInput} input - the input to add
      */
-    const addMIDIInput = useCallback((input, callback) => {
+    const addMIDIInput = useCallback(async (input, callback) => {
         try {
             if (!('inputs' in midiAccess))
                 throw new Error('inputs not available.');
-            openMIDIInput({ input, callback });
+            await openMIDIInput({ input, callback });
             setConnectedMIDIInputs({ type: 'add', value: input });
             return true;
         }
         catch (error) {
             return false;
         }
-    }, [connectedMIDIInputs]);
+    }, [midiInputs, midiAccess, connectedMIDIInputs]);
     /**
      * @function removeMIDIInput
      * @param {MIDIInput} input - the input to remove
@@ -213,7 +213,7 @@ function MIDIProvider(props) {
         catch (error) {
             return false;
         }
-    }, [connectedMIDIInputs]);
+    }, [midiInputs, midiAccess, connectedMIDIInputs]);
     /**
      * @function addMIDIOutput
      * @param {MIDIOutput} output - the output to add
@@ -222,13 +222,14 @@ function MIDIProvider(props) {
         try {
             if (!('outputs' in midiAccess))
                 throw new Error('outputs not available.');
+            sendMIDINoteOff({ device: output, pitch: 1, channel: 1 });
             setConnectedMIDIOutputs({ type: 'add', value: output });
             return true;
         }
         catch (error) {
             return false;
         }
-    }, [connectedMIDIOutputs]);
+    }, [midiOutputs, midiAccess, connectedMIDIOutputs]);
     /**
      * @function removeMIDIOutput
      * @param {MIDIOutput} output - the output to remove
@@ -241,7 +242,7 @@ function MIDIProvider(props) {
         catch (error) {
             return false;
         }
-    }, [connectedMIDIOutputs]);
+    }, [midiOutputs, midiAccess, connectedMIDIOutputs]);
     /**
      * @function sendMIDICC
      * @param {number} args.channel - the channel to send the command on
@@ -251,14 +252,14 @@ function MIDIProvider(props) {
      */
     const sendMIDICC = useCallback((args) => {
         const { channel, cc, value, device, } = args;
-        if (!channel)
+        if (typeof (channel) !== 'number')
             throw new Error(`no channel provided for cc. Expected a number and received ${channel}`);
-        if (!cc)
+        if (typeof (cc) !== 'number')
             throw new Error(`no cc# provided for cc. Expected a number and received ${cc}`);
+        if (typeof (value) !== 'number')
+            throw new Error(`no value provided for cc. Expected a number and received ${value}`);
         if (!device)
             throw new Error(`no device provided for cc. Expected a MIDIOutputDevice and recieved ${device}`);
-        if (!(value))
-            throw new Error(`no value provided for noteOn. Expected a number and received ${value}`);
         sendMIDIMessage({
             channel, cc, value, device, type: 'cc',
         });
@@ -276,14 +277,14 @@ function MIDIProvider(props) {
      */
     const sendMIDINoteOn = useCallback((args) => {
         const { channel, pitch, value, device, velocity, } = args;
-        if (!channel)
+        if (typeof (channel) !== 'number')
             throw new Error(`no channel provided for noteOn. Expected a number and received ${channel}`);
-        if (!pitch)
+        if (typeof (pitch) !== 'number')
             throw new Error(`no pitch provided for noteOn. Expected a number and received ${pitch}`);
+        if (typeof (velocity) !== 'number' && typeof (value) !== 'number')
+            throw new Error(`no value/velocity provided for noteOn. Expected a number and received ${velocity !== null && velocity !== void 0 ? velocity : value}`);
         if (!device)
             throw new Error(`no device provided for noteOn. Expected a MIDIOutputDevice and recieved ${device}`);
-        if (!(velocity || value))
-            throw new Error(`no value/velocity provided for noteOn. Expected a number and received ${velocity !== null && velocity !== void 0 ? velocity : value}`);
         sendMIDIMessage({
             channel, pitch, value: value !== null && value !== void 0 ? value : velocity, device, type: 'noteOn',
         });
@@ -296,9 +297,9 @@ function MIDIProvider(props) {
      */
     const sendMIDINoteOff = useCallback((args) => {
         const { channel, pitch, device, } = args;
-        if (!channel)
+        if (typeof (channel) !== 'number')
             throw new Error(`no channel provided for noteOff. Expected a number and received ${channel}`);
-        if (!pitch)
+        if (typeof (pitch) !== 'number')
             throw new Error(`no pitch provided for noteOff. Expected a number and received ${pitch}`);
         if (!device)
             throw new Error(`no device provided for noteOff. Expected a MIDIOutputDevice and received ${device}`);
@@ -326,7 +327,7 @@ function MIDIProvider(props) {
         addMIDIOutput,
         removeMIDIOutput,
         subscribe,
-    }), [connectedMIDIInputs, connectedMIDIOutputs, midiAccess]);
+    }), [midiInputs, midiOutputs, connectedMIDIInputs, connectedMIDIOutputs, midiAccess]);
     return (React.createElement(MIDIContext.Provider, { value: value }, children));
 }
 function useMIDIContext() {

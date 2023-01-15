@@ -1,6 +1,6 @@
 {
   "name": "react-midi-context",
-  "version": "1.0.11",
+  "version": "1.0.15",
   "type": "module",
   "description": "A library to provide React developers with easy access to the WebMIDI API",
   "main": "dist/index.js",

@@ -303,16 +303,16 @@ async function initializeMIDI():Promise<{midiAccess:any; midiInputs:Array<MIDIIn
    * @function addMIDIInput
    * @param {MIDIInput} input - the input to add
    */
-  const addMIDIInput = useCallback((input: MIDIInput, callback?: Function):boolean => {
+  const addMIDIInput = useCallback(async (input: MIDIInput, callback?: Function):Promise<boolean> => {
     try {
       if(!('inputs' in midiAccess)) throw new Error('inputs not available.');
-      openMIDIInput({input, callback});
+      await openMIDIInput({input, callback});
       setConnectedMIDIInputs({ type: 'add', value: input });
       return true;
     } catch (error) {
       return false;
     }
-  }, [connectedMIDIInputs]);
+  }, [midiInputs, midiAccess, connectedMIDIInputs]);
 
   /**
    * @function removeMIDIInput
@@ -327,7 +327,7 @@ async function initializeMIDI():Promise<{midiAccess:any; midiInputs:Array<MIDIIn
     } catch (error) {
       return false;
     }
-  }, [connectedMIDIInputs]);
+  }, [midiInputs, midiAccess, connectedMIDIInputs]);
 
   /**
    * @function addMIDIOutput
@@ -337,12 +337,13 @@ async function initializeMIDI():Promise<{midiAccess:any; midiInputs:Array<MIDIIn
   const addMIDIOutput = useCallback((output:MIDIOutput) => {
     try {
       if(!('outputs' in midiAccess)) throw new Error('outputs not available.')
+      sendMIDINoteOff({device:output, pitch: 1, channel:1})
       setConnectedMIDIOutputs({ type: 'add', value: output });
       return true;
     } catch (error) {
       return false;
     }
-  }, [connectedMIDIOutputs]);
+  }, [midiOutputs, midiAccess, connectedMIDIOutputs]);
 
   /**
    * @function removeMIDIOutput
@@ -356,7 +357,7 @@ async function initializeMIDI():Promise<{midiAccess:any; midiInputs:Array<MIDIIn
     } catch (error) {
       return false;
     }
-  }, [connectedMIDIOutputs]);
+  }, [midiOutputs, midiAccess, connectedMIDIOutputs]);
 
   /**
    * @function sendMIDICC
@@ -370,10 +371,10 @@ async function initializeMIDI():Promise<{midiAccess:any; midiInputs:Array<MIDIIn
     const {
       channel, cc, value, device,
     } = args;
-    if (!channel) throw new Error(`no channel provided for cc. Expected a number and received ${channel}`);
-    if (!cc) throw new Error(`no cc# provided for cc. Expected a number and received ${cc}`);
+    if (typeof(channel) !== 'number') throw new Error(`no channel provided for cc. Expected a number and received ${channel}`);
+    if (typeof(cc) !== 'number') throw new Error(`no cc# provided for cc. Expected a number and received ${cc}`);
+    if (typeof(value) !=='number') throw new Error(`no value provided for cc. Expected a number and received ${value}`);
     if (!device) throw new Error(`no device provided for cc. Expected a MIDIOutputDevice and recieved ${device}`);
-    if (!(value)) throw new Error(`no value provided for noteOn. Expected a number and received ${value}`);
     sendMIDIMessage({
       channel, cc, value, device, type: 'cc',
     });
@@ -395,10 +396,10 @@ async function initializeMIDI():Promise<{midiAccess:any; midiInputs:Array<MIDIIn
     const {
       channel, pitch, value, device, velocity,
     } = args;
-    if (!channel) throw new Error(`no channel provided for noteOn. Expected a number and received ${channel}`);
-    if (!pitch) throw new Error(`no pitch provided for noteOn. Expected a number and received ${pitch}`);
+    if (typeof(channel) !== 'number') throw new Error(`no channel provided for noteOn. Expected a number and received ${channel}`);
+    if (typeof(pitch) !== 'number') throw new Error(`no pitch provided for noteOn. Expected a number and received ${pitch}`);
+    if (typeof(velocity) !== 'number' && typeof(value) !== 'number') throw new Error(`no value/velocity provided for noteOn. Expected a number and received ${velocity ?? value}`);
     if (!device) throw new Error(`no device provided for noteOn. Expected a MIDIOutputDevice and recieved ${device}`);
-    if (!(velocity || value)) throw new Error(`no value/velocity provided for noteOn. Expected a number and received ${velocity ?? value}`);
     sendMIDIMessage({
       channel, pitch, value: value ?? velocity, device, type: 'noteOn',
     });
@@ -414,8 +415,8 @@ async function initializeMIDI():Promise<{midiAccess:any; midiInputs:Array<MIDIIn
     const {
       channel, pitch, device,
     } = args;
-    if (!channel) throw new Error(`no channel provided for noteOff. Expected a number and received ${channel}`);
-    if (!pitch) throw new Error(`no pitch provided for noteOff. Expected a number and received ${pitch}`);
+    if (typeof(channel) !== 'number') throw new Error(`no channel provided for noteOff. Expected a number and received ${channel}`);
+    if (typeof(pitch) !== 'number') throw new Error(`no pitch provided for noteOff. Expected a number and received ${pitch}`);
     if (!device) throw new Error(`no device provided for noteOff. Expected a MIDIOutputDevice and received ${device}`);
     sendMIDIMessage({
       channel, pitch, value: 0, device, type: 'noteOff',
@@ -441,7 +442,7 @@ async function initializeMIDI():Promise<{midiAccess:any; midiInputs:Array<MIDIIn
     addMIDIOutput,
     removeMIDIOutput,
     subscribe,
-  }), [connectedMIDIInputs, connectedMIDIOutputs, midiAccess]);
+  }), [midiInputs, midiOutputs, connectedMIDIInputs, connectedMIDIOutputs, midiAccess]);
   return (
     <MIDIContext.Provider value={value}>
       {children}
