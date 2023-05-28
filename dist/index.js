@@ -173,15 +173,12 @@ function MIDIProvider(props) {
     async function initializeMIDI() {
         if (!('requestMIDIAccess' in navigator))
             return Promise.reject(new Error('MIDI is not supported in this browser.'));
-        //@ts-ignore
         const tempMidiAccess = await navigator.requestMIDIAccess();
         setMIDIAccess(() => tempMidiAccess);
-        const tmpInputs = [...tempMidiAccess.inputs].map((input) => (input[1]));
         //@ts-ignore
-        setMIDIInputs(() => tmpInputs);
-        const tmpOutputs = [...tempMidiAccess.outputs].map((output) => (output[1]));
+        setMIDIInputs(() => ([...tempMidiAccess.inputs].map((input) => (input[1]))));
         //@ts-ignore
-        setMIDIOutputs(() => tmpOutputs);
+        setMIDIOutputs(() => ([...tempMidiAccess.outputs].map((output) => (output[1]))));
         return { midiAccess, midiInputs, midiOutputs };
     }
     /**
@@ -222,7 +219,7 @@ function MIDIProvider(props) {
         try {
             if (!('outputs' in midiAccess))
                 throw new Error('outputs not available.');
-            sendMIDINoteOff({ device: output, pitch: 1, channel: 1 });
+            // sendMIDINoteOff({device:output, pitch: 1, channel:1})
             setConnectedMIDIOutputs({ type: 'add', value: output });
             return true;
         }

@@ -25,7 +25,7 @@ in your React application in whatever way suits your needs.
 
 ## Available hooks
 
-### useMIDI
+### useMIDI(props?:{channel:number,cc:number, device:MIDIOutput})
 
 ### useMIDIActions
 

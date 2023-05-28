@@ -79,7 +79,7 @@ declare function MIDIProvider(props: {
  * @returns {object}
  */
 declare function useMIDI(): MIDIActions;
-declare function useMIDI(props: {
+declare function useMIDI(props?: {
     channel?: number;
     cc?: number;
     device?: MIDIOutput;

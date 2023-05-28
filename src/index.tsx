@@ -254,8 +254,9 @@ function useStoreData() {
 }
 
 
-function MIDIProvider(props:{children:React.ReactNode}):JSX.Element {
-  const { children } = props;
+
+function MIDIProvider(props:{children:React.ReactNode, onError:(err:Error)=>void}):JSX.Element {
+  const { children, onError } = props;
 
   function reducer(state:Array<MIDIPort | MIDIInput | MIDIOutput>, action:any) {
     switch (action.type) {
@@ -276,7 +277,7 @@ function MIDIProvider(props:{children:React.ReactNode}):JSX.Element {
   const [midiInputs, setMIDIInputs] = useState([]);
   const [midiOutputs, setMIDIOutputs] = useState([]);
   useEffect(()=>{
-    initializeMIDI();
+    initializeMIDI(onError);
   }, [])
 
   /**
@@ -284,18 +285,25 @@ function MIDIProvider(props:{children:React.ReactNode}):JSX.Element {
  * @returns {object} an object with midi inputs and outputs
  */ 
 
-async function initializeMIDI():Promise<{midiAccess:any; midiInputs:Array<MIDIInput>; midiOutputs:Array<MIDIOutput>}> {
-  if (!('requestMIDIAccess' in navigator)) return Promise.reject(new Error('MIDI is not supported in this browser.'));
-  //@ts-ignore
-  const tempMidiAccess = await navigator.requestMIDIAccess();
-  setMIDIAccess(()=>tempMidiAccess);
-  const tmpInputs = [...tempMidiAccess.inputs].map((input) => (input[1]))
-  //@ts-ignore
-  setMIDIInputs(()=>tmpInputs);
-  const tmpOutputs = [...tempMidiAccess.outputs].map((output) => (output[1]))
-  //@ts-ignore
-  setMIDIOutputs(()=>tmpOutputs);
-  return { midiAccess, midiInputs, midiOutputs };
+async function initializeMIDI(onError:(err:Error)=>void):Promise<{midiAccess:any; midiInputs:Array<MIDIInput>; midiOutputs:Array<MIDIOutput>}> {
+  try{
+
+    if (!('requestMIDIAccess' in navigator)) return Promise.reject(new Error('MIDI is not supported in this browser.'));
+    
+    const tempMidiAccess = await navigator.requestMIDIAccess();
+    setMIDIAccess(()=>tempMidiAccess);
+    //@ts-ignore
+    setMIDIInputs(()=>([...tempMidiAccess.inputs].map((input) => (input[1]))));
+    //@ts-ignore
+    setMIDIOutputs(()=>([...tempMidiAccess.outputs].map((output) => (output[1]))));
+    return { midiAccess, midiInputs, midiOutputs };
+  }catch(error){
+    onError(error);
+    setMIDIAccess(()=>{})
+    setMIDIInputs(()=>([]))
+    setMIDIOutputs(()=>([]));
+    return {midiAccess, midiInputs, midiOutputs}
+  }
 }
 
 
@@ -337,7 +345,7 @@ async function initializeMIDI():Promise<{midiAccess:any; midiInputs:Array<MIDIIn
   const addMIDIOutput = useCallback((output:MIDIOutput) => {
     try {
       if(!('outputs' in midiAccess)) throw new Error('outputs not available.')
-      sendMIDINoteOff({device:output, pitch: 1, channel:1})
+      // sendMIDINoteOff({device:output, pitch: 1, channel:1})
       setConnectedMIDIOutputs({ type: 'add', value: output });
       return true;
     } catch (error) {
@@ -483,7 +491,7 @@ function useMIDIContext():{
  */
 
 function useMIDI():MIDIActions;
-function useMIDI(props:{channel?:number, cc?:number, device?:MIDIOutput}): MIDIActions
+function useMIDI(props?:{channel?:number, cc?:number, device?:MIDIOutput}): MIDIActions
 
 function useMIDI(props?:{channel?:number, cc?:number, device?:MIDIOutput}){
   if (!props || !('channel' in props && 'cc' in props && 'device' in props)) return useMIDIContext();
