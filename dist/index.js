@@ -17,7 +17,8 @@ function translateTypeToStatusByte(type) {
     switch (type) {
         case ('noteOff'): return 0x80;
         case ('noteOn'): return 0x90;
-        case ('afterTouch'):        case ('cc'): return 0xB0;
+        case ('afterTouch'): return 0xA0;
+        case ('cc'): return 0xB0;
         case ('controlChange'): return 0xB0;
         case ('programChange'): return 0xC0;
         case ('channelPressure'): return 0xD0;
@@ -146,7 +147,7 @@ function useStoreData() {
     };
 }
 function MIDIProvider(props) {
-    const { children } = props;
+    const { children, onError } = props;
     function reducer(state, action) {
         switch (action.type) {
             case 'add':
@@ -164,22 +165,31 @@ function MIDIProvider(props) {
     const [midiInputs, setMIDIInputs] = useState([]);
     const [midiOutputs, setMIDIOutputs] = useState([]);
     useEffect(() => {
-        initializeMIDI();
+        initializeMIDI(onError);
     }, []);
     /**
    * @function initializeMIDI
    * @returns {object} an object with midi inputs and outputs
    */
-    async function initializeMIDI() {
-        if (!('requestMIDIAccess' in navigator))
-            return Promise.reject(new Error('MIDI is not supported in this browser.'));
-        const tempMidiAccess = await navigator.requestMIDIAccess();
-        setMIDIAccess(() => tempMidiAccess);
-        //@ts-ignore
-        setMIDIInputs(() => ([...tempMidiAccess.inputs].map((input) => (input[1]))));
-        //@ts-ignore
-        setMIDIOutputs(() => ([...tempMidiAccess.outputs].map((output) => (output[1]))));
-        return { midiAccess, midiInputs, midiOutputs };
+    async function initializeMIDI(onError) {
+        try {
+            if (!('requestMIDIAccess' in navigator))
+                return Promise.reject(new Error('MIDI is not supported in this browser.'));
+            const tempMidiAccess = await navigator.requestMIDIAccess();
+            setMIDIAccess(() => tempMidiAccess);
+            //@ts-ignore
+            setMIDIInputs(() => ([...tempMidiAccess.inputs].map((input) => (input[1]))));
+            //@ts-ignore
+            setMIDIOutputs(() => ([...tempMidiAccess.outputs].map((output) => (output[1]))));
+            return { midiAccess, midiInputs, midiOutputs };
+        }
+        catch (error) {
+            onError(error);
+            setMIDIAccess(() => { });
+            setMIDIInputs(() => ([]));
+            setMIDIOutputs(() => ([]));
+            return { midiAccess, midiInputs, midiOutputs };
+        }
     }
     /**
      * @function addMIDIInput

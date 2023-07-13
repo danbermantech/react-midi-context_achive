@@ -69,6 +69,7 @@ export interface MIDIActions {
 }
 declare function MIDIProvider(props: {
     children: React.ReactNode;
+    onError: (err: Error) => void;
 }): JSX.Element;
 /**
  * @function useMIDI

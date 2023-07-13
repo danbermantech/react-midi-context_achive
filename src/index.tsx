@@ -21,7 +21,7 @@ function translateTypeToStatusByte(type: string): number{
   switch(type){
     case('noteOff'): return 0x80;
     case('noteOn'): return 0x90;
-    case('afterTouch'): 0xA0;
+    case('afterTouch'): return 0xA0;
     case('cc'): return 0xB0;
     case('controlChange'): return 0xB0;
     case('programChange'): return 0xC0;
