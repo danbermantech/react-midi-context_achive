@@ -1,21 +1,6 @@
-/**
- * @module MIDIContext
- */
-
 import React, {
   useMemo, createContext, useContext, useReducer, useCallback, useRef, useState, useEffect
 } from 'react';
-
-/**
- * @typedef {string} StatusByte
- * @property {number} noteOff - 0x8
- * @property {number} noteOn - 0x9
- * @property {number} afterTouch - 0xA
- * @property {number} controlChange - 0xB
- * @property {number} programChange - 0xC
- * @property {number} channelPressure - 0xD
- * @property {number} pitchWheel - 0xE
- */
 
 function translateTypeToStatusByte(type: string): number{
   switch(type){
@@ -31,43 +16,13 @@ function translateTypeToStatusByte(type: string): number{
   }
 };
 
-/**
- * @function sendMIDIMessage
- * @param {Object} props
- * @param {int} props.channel
- * @param {int} props.cc
- * @param {int} props.value
- * @param {int} props.pitch
- * @param {MIDIOutput} props.device
- * @param {StatusByte} props.type
- * @param {boolean} props.log
- * @returns {string}
- */
-
-export interface MIDIPort{
-  connection: string;
-  id: string;
-  manufacturer: string;
-  onstatechange?: Function;
-  name?: string;
-  state: string;
-  type: string;
-  version: string;
-}
-
-export interface MIDIOutput extends MIDIPort{
-  send: Function;
-}
-
-
-
 export interface MIDICommand {
-  channel?: number;
+  channel: number;
   cc?: number ;
   value?: number;
   velocity?: number;
   pitch?: number;
-  device?: MIDIOutput | MIDIOutput[];
+  device?: WebMidi.MIDIOutput;
   type?: string;
   log?: boolean;
 }
@@ -87,28 +42,18 @@ function sendMIDIMessage(props: MIDICommand): string {
   const statusBytes = firstStatusByte + (channel ?? 0);
   const msg = [statusBytes, pitch || (cc || 0), value || 0];
   if (device) {
-    if (device.constructor === Array) {
-      device.forEach((d) => d?.send(msg));
-      return `messages sent successfully to multiple outputs : ${msg}`;
+    try{
+      device.send(msg);
+    }catch(error){
+      if(log) console.warn(error);
+      return 'an error occured.'
     }
-    if(!Array.isArray(device)){
-      try{
-        device.send(msg);
-      }catch(error){
-        if(log) console.warn(error);
-        return 'an error occured.'
-      }
-      return `MIDI message successfully sent : ${msg}`;
-    }
+    return `MIDI message successfully sent : ${msg}`;
   }
   return 'No device specified';
 }
 
-/**
- * @param {Event} event - a MIDI input event
- * @returns {Object} Object `{data: event.data, timeStamp: event.timeStamp, str: str}`
- */
-function onMIDIMessage(event:Event|any): object {
+function onMIDIMessage(event:WebMidi.MIDIMessageEvent): { data: Uint8Array, timeStamp: number, str: string } {
   let str = '';
   for (let i = 0; i < event.data.length; i += 1) {
     str += `0x${event.data[i].toString(16)} `;
@@ -116,28 +61,23 @@ function onMIDIMessage(event:Event|any): object {
   return { data: event.data, timeStamp: event.timeStamp, str };
 }
 
-/**
- * @param {MIDIInput} props.input - an input from the MIDIAccess object
- * @returns {MIDIInput}
- */
-
-export interface MIDIInput extends MIDIPort{
-  onmidimessage?: Function;
-  open: Function;
-  close: Function;
+interface openMIDIInputArgs{
+  input:WebMidi.MIDIInput, 
+  callback?:(args:{relVal:string, input:ReturnType<typeof onMIDIMessage>})=>void
 }
-async function openMIDIInput (props:{input:MIDIInput, callback?:Function}): Promise<MIDIInput | Error> {
+
+async function openMIDIInput (props:openMIDIInputArgs): Promise<WebMidi.MIDIInput | Error> {
   const { input, callback } = props;
   if (typeof (input) !== 'object') return new Error('No input supplied');
   if (input.connection === 'open' && !callback) return input;
-  input.onmidimessage = (msg:Event) => onMIDIMessage(msg);
+  input.onmidimessage = (msg:WebMidi.MIDIMessageEvent) => onMIDIMessage(msg);
   if (typeof (callback) === 'function') {
-    const cb = (msg:Event) => {
+    const cb = (msg:WebMidi.MIDIMessageEvent) => {
       const message = onMIDIMessage(msg);
       const stateObj = { relVal: 'mostRecentMessage', input: message };
       callback(stateObj);
     };
-    input.onmidimessage = (msg:Event) => cb(msg);
+    input.onmidimessage = (msg:WebMidi.MIDIMessageEvent) => cb(msg);
   }
   await input.open();
   return input;
@@ -148,53 +88,16 @@ async function openMIDIInput (props:{input:MIDIInput, callback?:Function}): Prom
  * @param {MIDIInput} input
  * @returns {MIDIInput}
  */
-async function closeMIDIInput(input:MIDIInput): Promise<MIDIInput> {
+async function closeMIDIInput(input:WebMidi.MIDIInput): Promise<WebMidi.MIDIInput> {
   await input.close();
   return input;
 }
 
 
-export interface MIDIActions {
-  initializeMIDI:Function;
-  openMIDIInput:Function;
-  onMIDIMessage:Function;
-  sendMIDIMessage:Function;
-  sendMIDICC:Function;
-  sendMIDINoteOn:Function;
-  sendMIDINoteOff:Function;
-  getMIDIValue:Function;
-  midiAccess:Object;
-  midiInputs:Array<MIDIInput>;
-  midiOutputs:Array<MIDIOutput>;
-  connectedMIDIInputs:Array<MIDIInput>;
-  addMIDIInput:Function;
-  removeMIDIInput:Function;
-  connectedMIDIOutputs:Array<MIDIOutput>;
-  setConnectedMIDIOutputs:Function;
-  addMIDIOutput:Function;
-  removeMIDIOutput:Function;
-  subscribe:Function
+interface MIDIContextValue {
 }
 
-const MIDIContext:React.Context<any> = createContext({
-  initializeMIDI:function(){},
-  openMIDIInput:function(){},
-  onMIDIMessage:function(){},
-  sendMIDIMessage:function(){},
-  sendMIDICC:function(){},
-  sendMIDINoteOn:function(){},
-  sendMIDINoteOff:function(){},
-  midiAccess:{},
-  midiInputs:[],
-  midiOutputs:[],
-  connectedMIDIInputs:[],
-  addMIDIInput:function(){},
-  removeMIDIInput:function(){},
-  connectedMIDIOutputs:[],
-  setConnectedMIDIOutputs:function(){},
-  addMIDIOutput:function(){},
-  removeMIDIOutput:function(){},
-});
+const MIDIContext = createContext<MIDIContextValue>({} as MIDIContextValue);
 
 
 
@@ -204,7 +107,7 @@ function useStoreData() {
     byChannel:any
 }> = useRef({ byDevice: {}, byChannel: {} });
 
-  const get = useCallback((props?:{channel?:number; cc?:number; device?:MIDIInput|MIDIOutput}) =>{
+  const get = useCallback((props?:{channel?:number; cc?:number; device?:WebMidi.MIDIInput|WebMidi.MIDIOutput}) =>{
     if (!props) return store.current;
     const { channel, cc, device } = props;
     if (device) {
@@ -218,7 +121,7 @@ function useStoreData() {
     if (!cc) return store.current.byChannel[channel];
     return store.current.byChannel[channel][cc];
   },[]);
-  const set = useCallback((value:{channel:number, cc:number, value:number, device:MIDIPort}) => {
+  const set = useCallback((value:{channel:number, cc:number, value:number, device:WebMidi.MIDIPort}) => {
     store.current = {
       byChannel: {
         ...store.current.byChannel,
@@ -258,7 +161,7 @@ function useStoreData() {
 function MIDIProvider(props:{children:React.ReactNode, onError:(err:Error)=>void}):JSX.Element {
   const { children, onError } = props;
 
-  function reducer(state:Array<MIDIPort | MIDIInput | MIDIOutput>, action:any) {
+  function reducer(state:Array<WebMidi.MIDIPort | WebMidi.MIDIInput | WebMidi.MIDIOutput>, action:any) {
     switch (action.type) {
       case 'add':
         return [...new Set([...state, action.value])];
@@ -273,47 +176,27 @@ function MIDIProvider(props:{children:React.ReactNode, onError:(err:Error)=>void
   const [connectedMIDIOutputs, setConnectedMIDIOutputs] = useReducer(reducer, []);
   const { get: getMIDIValue, set: setMIDIValue, subscribe } = useStoreData();
   
-  const [midiAccess, setMIDIAccess] = useState({});
-  const [midiInputs, setMIDIInputs] = useState([]);
-  const [midiOutputs, setMIDIOutputs] = useState([]);
+  const [midiAccess, setMIDIAccess] = useState<WebMidi.MIDIAccess|null>(null);
+  const [midiInputs, setMIDIInputs] = useState<WebMidi.MIDIInput[]>([]);
+  const [midiOutputs, setMIDIOutputs] = useState<WebMidi.MIDIOutput[]>([]);
   useEffect(()=>{
     initializeMIDI(onError);
   }, [])
+  const initializeMIDI = useCallback(async (onError:(err:Error)=>void)=>{
+    try{
+      if (!('requestMIDIAccess' in navigator)) throw new Error('MIDI is not supported in this browser.');
+      const tempMidiAccess = await navigator.requestMIDIAccess();
+      setMIDIAccess(()=>tempMidiAccess);
+      setMIDIInputs(()=>([...tempMidiAccess.inputs].map((input) => (input[1]))));
+      setMIDIOutputs(()=>([...tempMidiAccess.outputs].map((output) => (output[1]))));
+    }catch(error){
+      onError(error);
+    }
+  },[]);
 
-  /**
- * @function initializeMIDI
- * @returns {object} an object with midi inputs and outputs
- */ 
-
-async function initializeMIDI(onError:(err:Error)=>void):Promise<{midiAccess:any; midiInputs:Array<MIDIInput>; midiOutputs:Array<MIDIOutput>}> {
-  try{
-
-    if (!('requestMIDIAccess' in navigator)) return Promise.reject(new Error('MIDI is not supported in this browser.'));
-    
-    const tempMidiAccess = await navigator.requestMIDIAccess();
-    setMIDIAccess(()=>tempMidiAccess);
-    //@ts-ignore
-    setMIDIInputs(()=>([...tempMidiAccess.inputs].map((input) => (input[1]))));
-    //@ts-ignore
-    setMIDIOutputs(()=>([...tempMidiAccess.outputs].map((output) => (output[1]))));
-    return { midiAccess, midiInputs, midiOutputs };
-  }catch(error){
-    onError(error);
-    setMIDIAccess(()=>{})
-    setMIDIInputs(()=>([]))
-    setMIDIOutputs(()=>([]));
-    return {midiAccess, midiInputs, midiOutputs}
-  }
-}
-
-
-  /**
-   * @function addMIDIInput
-   * @param {MIDIInput} input - the input to add
-   */
-  const addMIDIInput = useCallback(async (input: MIDIInput, callback?: Function):Promise<boolean> => {
+  const addMIDIInput = useCallback(async (input: WebMidi.MIDIInput, callback?: openMIDIInputArgs['callback']):Promise<boolean> => {
     try {
-      if(!('inputs' in midiAccess)) throw new Error('inputs not available.');
+      if(!midiAccess || !('inputs' in midiAccess)) throw new Error('inputs not available.');
       await openMIDIInput({input, callback});
       setConnectedMIDIInputs({ type: 'add', value: input });
       return true;
@@ -322,12 +205,7 @@ async function initializeMIDI(onError:(err:Error)=>void):Promise<{midiAccess:any
     }
   }, [midiInputs, midiAccess, connectedMIDIInputs]);
 
-  /**
-   * @function removeMIDIInput
-   * @param {MIDIInput} input - the input to remove
-   */
-
-  const removeMIDIInput = useCallback((input:MIDIInput):boolean => {
+  const removeMIDIInput = useCallback((input:WebMidi.MIDIInput):boolean => {
     try {
       closeMIDIInput(input);
       setConnectedMIDIInputs({ type: 'remove', value: input });
@@ -337,15 +215,9 @@ async function initializeMIDI(onError:(err:Error)=>void):Promise<{midiAccess:any
     }
   }, [midiInputs, midiAccess, connectedMIDIInputs]);
 
-  /**
-   * @function addMIDIOutput
-   * @param {MIDIOutput} output - the output to add
-   */
-
-  const addMIDIOutput = useCallback((output:MIDIOutput) => {
+  const addMIDIOutput = useCallback((output:WebMidi.MIDIOutput) => {
     try {
-      if(!('outputs' in midiAccess)) throw new Error('outputs not available.')
-      // sendMIDINoteOff({device:output, pitch: 1, channel:1})
+      if(!midiAccess ||  !('outputs' in midiAccess)) throw new Error('outputs not available.')
       setConnectedMIDIOutputs({ type: 'add', value: output });
       return true;
     } catch (error) {
@@ -353,12 +225,7 @@ async function initializeMIDI(onError:(err:Error)=>void):Promise<{midiAccess:any
     }
   }, [midiOutputs, midiAccess, connectedMIDIOutputs]);
 
-  /**
-   * @function removeMIDIOutput
-   * @param {MIDIOutput} output - the output to remove
-   */
-
-  const removeMIDIOutput = useCallback((output:MIDIOutput) => {
+  const removeMIDIOutput = useCallback((output:WebMidi.MIDIOutput) => {
     try {
       setConnectedMIDIOutputs({ type: 'remove', value: output });
       return true;
@@ -367,15 +234,7 @@ async function initializeMIDI(onError:(err:Error)=>void):Promise<{midiAccess:any
     }
   }, [midiOutputs, midiAccess, connectedMIDIOutputs]);
 
-  /**
-   * @function sendMIDICC
-   * @param {number} args.channel - the channel to send the command on
-   * @param {number} args.cc - the CC# to send the command on
-   * @param {number} args.value = the value to send
-   * @param {MIDIOutput} args.device - the device to send the command on
-   */
-
-  const sendMIDICC = useCallback((args:{channel:number, cc:number, value:number, device:MIDIOutput}) => {
+  const sendMIDICC = useCallback((args:{channel:number, cc:number, value:number, device:WebMidi.MIDIOutput}) => {
     const {
       channel, cc, value, device,
     } = args;
@@ -391,16 +250,7 @@ async function initializeMIDI(onError:(err:Error)=>void):Promise<{midiAccess:any
     });
   }, [connectedMIDIOutputs, sendMIDIMessage]);
 
-  /**
-   * @function sendMIDINoteOn
-   * @param {number} args.channel - the channel to send the command on
-   * @param {number} args.pitch - the pitch to send
-   * @param {number} [args.value] = the value to send
-   * @param {number} [args.velocity] - alias of value
-   * @param {MIDIOutput} args.device - the device to send the command on
-   */
-
-  const sendMIDINoteOn = useCallback((args:{channel:number, pitch:number, value?:number, velocity?:number, device:MIDIOutput}) => {
+  const sendMIDINoteOn = useCallback((args:{channel:number, pitch:number, value?:number, velocity?:number, device:WebMidi.MIDIOutput}) => {
     const {
       channel, pitch, value, device, velocity,
     } = args;
@@ -413,13 +263,7 @@ async function initializeMIDI(onError:(err:Error)=>void):Promise<{midiAccess:any
     });
   }, [connectedMIDIOutputs, sendMIDIMessage]);
 
-  /**
-   * @function sendMIDINoteOff
-   * @param {number} args.channel - the channel to send the command on
-   * @param {number} args.pitch - the pitch to send
-   * @param {MIDIOutput} args.device - the device to send the command on
-   */
-  const sendMIDINoteOff = useCallback((args:{channel:number, pitch:number, device:MIDIOutput}) => {
+  const sendMIDINoteOff = useCallback((args:{channel:number, pitch:number, device:WebMidi.MIDIOutput}) => {
     const {
       channel, pitch, device,
     } = args;
@@ -430,7 +274,31 @@ async function initializeMIDI(onError:(err:Error)=>void):Promise<{midiAccess:any
       channel, pitch, value: 0, device, type: 'noteOff',
     });
   }, [connectedMIDIOutputs, sendMIDIMessage]);
-  const value = useMemo(():MIDIActions => ({
+
+  interface MIDIContextValue {
+    initializeMIDI: (onError:(err:Error)=>void) =>void;
+    openMIDIInput: (args:openMIDIInputArgs) => Promise<WebMidi.MIDIInput|Error>;
+    onMIDIMessage: (message:WebMidi.MIDIMessageEvent) => void;
+    getMIDIValue: (args:MIDICommand) => number;
+    sendMIDIMessage: (args:MIDICommand) => void;
+    sendMIDICC: (args:MIDICommand) => void;
+    sendMIDINoteOn: (args:{channel:number, pitch:number, value?:number, velocity?:number, device:WebMidi.MIDIOutput}) => void;
+    sendMIDINoteOff: (args:{channel:number, pitch:number, device:WebMidi.MIDIOutput}) => void;
+    midiAccess:WebMidi.MIDIAccess|null;
+    midiInputs:WebMidi.MIDIInput[];
+    midiOutputs:WebMidi.MIDIOutput[];
+    connectedMIDIInputs:WebMidi.MIDIInput[];
+    addMIDIInput: (input: WebMidi.MIDIInput, callback?: openMIDIInputArgs['callback']) => Promise<boolean>;
+    removeMIDIInput: (input:WebMidi.MIDIInput) => boolean;
+    connectedMIDIOutputs:WebMidi.MIDIOutput[];
+    setConnectedMIDIOutputs: (outputs:WebMidi.MIDIOutput[]) => void;
+    addMIDIOutput: (output:WebMidi.MIDIOutput) => boolean;
+    removeMIDIOutput: (output:WebMidi.MIDIOutput) => boolean;
+    subscribe: (fn:Function) => void;
+  }
+
+
+  const value = useMemo(():MIDIContextValue => ({
     initializeMIDI,
     openMIDIInput,
     onMIDIMessage,
@@ -458,60 +326,77 @@ async function initializeMIDI(onError:(err:Error)=>void):Promise<{midiAccess:any
   );
 }
 
-function useMIDIContext():{
-  initializeMIDI:Function,
-  openMIDIInput:Function,
-  onMIDIMessage:Function,
-  sendMIDIMessage:Function,
-  sendMIDICC:Function,
-  sendMIDINoteOn:Function,
-  sendMIDINoteOff:Function,
-  midiAccess:Object,
-  midiInputs:Array<MIDIInput>,
-  midiOutputs:Array<MIDIOutput>,
-  connectedMIDIInputs:Array<MIDIInput>,
-  connectedMIDIOutputs:Array<MIDIOutput>,
-  addMIDIInput:Function,
-  removeMIDIInput:Function,
-  setConnectedMIDIOutputs:Function,
-  addMIDIOutput:Function,
-  removeMIDIOutput:Function,
-  subscribe:Function,}{
-  return useContext(MIDIContext)
+type SelectorFunction<R> = (state: MIDIContextValue) => R;
+
+function useMIDIContext<R>(selector: SelectorFunction<R>): R {
+  const latestSelectedStateRef = useRef<R>();
+  const latestSelectedResultRef = useRef<R>();
+
+  const valueFromContext = useContext(MIDIContext);
+  const selectedState = selector(valueFromContext);
+
+  if (selectedState !== latestSelectedStateRef.current) {
+    latestSelectedStateRef.current = selectedState;
+    latestSelectedResultRef.current = selectedState;
+  }
+
+  return latestSelectedResultRef.current!;
+}
+
+interface MIDIContextValue {
+  initializeMIDI: (onError:(err:Error)=>void) =>void;
+  openMIDIInput: (args:openMIDIInputArgs) => Promise<WebMidi.MIDIInput|Error>;
+  onMIDIMessage: (message:WebMidi.MIDIMessageEvent) => void;
+  getMIDIValue: (args:MIDICommand) => number;
+  sendMIDIMessage: (args:MIDICommand) => void;
+  sendMIDICC: (args:MIDICommand) => void;
+  sendMIDINoteOn: (args:MIDICommand) => void;
+  sendMIDINoteOff: (args:MIDICommand) => void;
+  midiAccess:WebMidi.MIDIAccess|null;
+  midiInputs:WebMidi.MIDIInput[];
+  midiOutputs:WebMidi.MIDIOutput[];
+  connectedMIDIInputs:WebMidi.MIDIInput[];
+  addMIDIInput: (input: WebMidi.MIDIInput, callback?: openMIDIInputArgs['callback']) => Promise<boolean>;
+  removeMIDIInput: (input:WebMidi.MIDIInput) => boolean;
+  connectedMIDIOutputs:WebMidi.MIDIOutput[];
+  setConnectedMIDIOutputs: (outputs:WebMidi.MIDIOutput[]) => void;
+  addMIDIOutput: (output:WebMidi.MIDIOutput) => boolean;
+  removeMIDIOutput: (output:WebMidi.MIDIOutput) => boolean;
+  subscribe: (fn:Function) => void;
 }
 
 
-/**
- * @function useMIDI
- * @param {object} props
- * @param {int} [props.channel]
- * @param {int} [props.cc]
- * @param {MIDIOutput} [props.device]
- * @returns {object}
- */
 
-function useMIDI():MIDIActions;
-function useMIDI(props?:{channel?:number, cc?:number, device?:MIDIOutput}): MIDIActions
+function useMIDI():MIDIContextValue;
+function useMIDI(props:{channel?:number, cc?:number, device?:WebMidi.MIDIOutput}):{sendMIDIMessage:(value:number)=>void};
 
-function useMIDI(props?:{channel?:number, cc?:number, device?:MIDIOutput}){
-  if (!props || !('channel' in props && 'cc' in props && 'device' in props)) return useMIDIContext();
-  const { channel, cc, device } = props;
-  const send = (value:number) => {
-    sendMIDIMessage({
-      channel, cc, value, device, type:'cc'
-    });
-  };
-  return {
-    sendMIDIMessage: send,
-  };
+function useMIDI(props?:{channel?:number, cc?:number, device?:WebMidi.MIDIOutput}){
+  const { channel, cc, device } = props ?? {};
+  if(typeof(channel) == 'number' && typeof(cc) == 'number'){
+    
+    const send = (value:number) => {
+      sendMIDIMessage({
+        channel, cc, value, device, type:'cc'
+      });
+    };
+    return {
+      sendMIDIMessage: send,
+    };
+  }
+  return useMIDIContext((cv)=>cv);
 }
 
-function useMIDIOutput(requestedDevice: number | string):{device:MIDIOutput, sendMIDICC:Function, sendMIDIMessage:Function, sendMIDINoteOn:Function, sendMIDINoteOff:Function}{
-  const {midiOutputs, sendMIDICC, sendMIDIMessage, sendMIDINoteOn, sendMIDINoteOff} = useMIDIContext();
-  let device:MIDIOutput;
-  if (typeof (requestedDevice) == 'number') device = midiOutputs[requestedDevice];
-  else device = midiOutputs.filter((device:MIDIOutput)=>(device.name === requestedDevice))[0];
-  if(typeof(device) === 'undefined') {
+function useMIDIOutput(requestedDevice: number | string){
+  const midiOutputs = useMIDIContext((cv)=>cv.midiOutputs);
+  const sendMIDICC = useMIDIContext((cv)=>cv.sendMIDICC);
+  const sendMIDIMessage = useMIDIContext((cv)=>cv.sendMIDIMessage);
+  const sendMIDINoteOn = useMIDIContext((cv)=>cv.sendMIDINoteOn);
+  const sendMIDINoteOff = useMIDIContext((cv)=>cv.sendMIDINoteOff);
+
+  let device = (typeof (requestedDevice) == 'number') 
+    ? midiOutputs[requestedDevice] 
+    : midiOutputs.filter((device)=>(device.name === requestedDevice))[0];
+  if(!device) {
     return {
       device, 
       sendMIDICC:()=>{}, 
@@ -537,37 +422,31 @@ function useMIDIOutput(requestedDevice: number | string):{device:MIDIOutput, sen
   }
 }
 
-function useMIDIInput(requestedDevice: number | string):MIDIInput{
-  const {midiInputs} = useMIDIContext();
-  let device:MIDIInput;
+function useMIDIInput(requestedDevice: number | string){
+  const midiInputs = useMIDIContext(cv=>cv.midiInputs);
+  let device:WebMidi.MIDIInput;
   try{
 
     if(typeof (requestedDevice) == 'number'){
       device = midiInputs[requestedDevice];
     }
     else{
-      device = midiInputs.filter((device:MIDIInput)=>(device.name === requestedDevice))[0];
+      device = midiInputs.filter((device:WebMidi.MIDIInput)=>(device.name === requestedDevice))[0];
     }
     if(!('connection' in device)) throw new Error('no device');
     if(device.connection == 'closed') device.open();
     return device;
   }catch(err){
-    return {
-      connection: 'disconnected',
-      id: 'err',
-      manufacturer: 'err',
-      name: 'err',
-      state: 'disconnected',
-      type: 'output',
-      open:()=>{},
-      close:()=>{},
-      version: '0',
-    }
+    return null;
   }
 }
 
-function useMIDIActions(device?:MIDIOutput):{sendMIDICC:Function, sendMIDIMessage:Function, sendMIDINoteOn:Function, sendMIDINoteOff:Function}{
-  const {sendMIDICC, sendMIDIMessage, sendMIDINoteOn, sendMIDINoteOff} = useMIDIContext();
+function useMIDIActions(device?:WebMidi.MIDIOutput){
+  const sendMIDICC = useMIDIContext((cv)=>cv.sendMIDICC);
+  const sendMIDIMessage = useMIDIContext((cv)=>cv.sendMIDIMessage);
+  const sendMIDINoteOn = useMIDIContext((cv)=>cv.sendMIDINoteOn);
+  const sendMIDINoteOff = useMIDIContext((cv)=>cv.sendMIDINoteOff);
+
   if(!device){
     return {sendMIDICC, sendMIDIMessage, sendMIDINoteOn, sendMIDINoteOff};
   }
@@ -587,23 +466,8 @@ function useMIDIActions(device?:MIDIOutput):{sendMIDICC:Function, sendMIDIMessag
   }
 }
 
-/**
- * @typedef MIDIOutput
- * @type {object}
- * @description Native js {@link https://developer.mozilla.org/en-US/docs/Web/API/MIDIOutput|MIDIOutput} object. Inherits properties from {@link https://developer.mozilla.org/en-US/docs/Web/API/MIDIPort|MIDIPort}
- * @property {string} id - the device id ("output" + it's order it the MIDIOutputList + 1)
- * @property {("open"|"closed"|"pending")} connection - connection status of the device,
- * eg: whether it is being used by the app
- * @property {string} manufacturer - the device manufacturer if available, or an empty string
- * @property {} onstatechange - DLSKJFJLSKDNFLKSNDFLKNSDLFKNSDLKFNLSKDFNLSKDNFL
- * @property {("connected"|"disconnected")} state - Indicates whether the device
- * is connected to the system
- * @property {"output"} type - the MIDIPort type (always output)
- * @property {string} version - version of the port, usually "1.0"
- */
-
-const index = { MIDIProvider, useMIDI, useMIDIInput, useMIDIOutput, useMIDIActions };
+const index = { MIDIProvider, useMIDI, useMIDIInput, useMIDIOutput, useMIDIActions, useMIDIContext };
 
 export default index;
 
-export { MIDIProvider, useMIDI, useMIDIInput, useMIDIOutput, useMIDIActions };
+export { MIDIProvider, useMIDI, useMIDIInput, useMIDIOutput, useMIDIActions, useMIDIContext };

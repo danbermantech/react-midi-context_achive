@@ -1,71 +1,28 @@
-/**
- * @module MIDIContext
- */
+/// <reference types="webmidi" />
 import React from 'react';
-/**
- * @function sendMIDIMessage
- * @param {Object} props
- * @param {int} props.channel
- * @param {int} props.cc
- * @param {int} props.value
- * @param {int} props.pitch
- * @param {MIDIOutput} props.device
- * @param {StatusByte} props.type
- * @param {boolean} props.log
- * @returns {string}
- */
-export interface MIDIPort {
-    connection: string;
-    id: string;
-    manufacturer: string;
-    onstatechange?: Function;
-    name?: string;
-    state: string;
-    type: string;
-    version: string;
-}
-export interface MIDIOutput extends MIDIPort {
-    send: Function;
-}
 export interface MIDICommand {
-    channel?: number;
+    channel: number;
     cc?: number;
     value?: number;
     velocity?: number;
     pitch?: number;
-    device?: MIDIOutput | MIDIOutput[];
+    device?: WebMidi.MIDIOutput;
     type?: string;
     log?: boolean;
 }
-/**
- * @param {MIDIInput} props.input - an input from the MIDIAccess object
- * @returns {MIDIInput}
- */
-export interface MIDIInput extends MIDIPort {
-    onmidimessage?: Function;
-    open: Function;
-    close: Function;
+declare function onMIDIMessage(event: WebMidi.MIDIMessageEvent): {
+    data: Uint8Array;
+    timeStamp: number;
+    str: string;
+};
+interface openMIDIInputArgs {
+    input: WebMidi.MIDIInput;
+    callback?: (args: {
+        relVal: string;
+        input: ReturnType<typeof onMIDIMessage>;
+    }) => void;
 }
-export interface MIDIActions {
-    initializeMIDI: Function;
-    openMIDIInput: Function;
-    onMIDIMessage: Function;
-    sendMIDIMessage: Function;
-    sendMIDICC: Function;
-    sendMIDINoteOn: Function;
-    sendMIDINoteOff: Function;
-    getMIDIValue: Function;
-    midiAccess: Object;
-    midiInputs: Array<MIDIInput>;
-    midiOutputs: Array<MIDIOutput>;
-    connectedMIDIInputs: Array<MIDIInput>;
-    addMIDIInput: Function;
-    removeMIDIInput: Function;
-    connectedMIDIOutputs: Array<MIDIOutput>;
-    setConnectedMIDIOutputs: Function;
-    addMIDIOutput: Function;
-    removeMIDIOutput: Function;
-    subscribe: Function;
+interface MIDIContextValue {
 }
 declare function MIDIProvider(props: {
     children: React.ReactNode;
@@ -79,40 +36,49 @@ declare function MIDIProvider(props: {
  * @param {MIDIOutput} [props.device]
  * @returns {object}
  */
-declare function useMIDI(): MIDIActions;
-declare function useMIDI(props?: {
+interface MIDIContextValue {
+    initializeMIDI: (onError: (err: Error) => void) => void;
+    openMIDIInput: (args: openMIDIInputArgs) => Promise<WebMidi.MIDIInput | Error>;
+    onMIDIMessage: (message: WebMidi.MIDIMessageEvent) => void;
+    getMIDIValue: (args: MIDICommand) => number;
+    sendMIDIMessage: (args: MIDICommand) => void;
+    sendMIDICC: (args: MIDICommand) => void;
+    sendMIDINoteOn: (args: MIDICommand) => void;
+    sendMIDINoteOff: (args: MIDICommand) => void;
+    midiAccess: WebMidi.MIDIAccess | null;
+    midiInputs: WebMidi.MIDIInput[];
+    midiOutputs: WebMidi.MIDIOutput[];
+    connectedMIDIInputs: WebMidi.MIDIInput[];
+    addMIDIInput: (input: WebMidi.MIDIInput, callback?: openMIDIInputArgs['callback']) => Promise<boolean>;
+    removeMIDIInput: (input: WebMidi.MIDIInput) => boolean;
+    connectedMIDIOutputs: WebMidi.MIDIOutput[];
+    setConnectedMIDIOutputs: (outputs: WebMidi.MIDIOutput[]) => void;
+    addMIDIOutput: (output: WebMidi.MIDIOutput) => boolean;
+    removeMIDIOutput: (output: WebMidi.MIDIOutput) => boolean;
+    subscribe: (fn: Function) => void;
+}
+declare function useMIDI(): MIDIContextValue;
+declare function useMIDI(props: {
     channel?: number;
     cc?: number;
-    device?: MIDIOutput;
-}): MIDIActions;
+    device?: WebMidi.MIDIOutput;
+}): {
+    sendMIDIMessage: (value: number) => void;
+};
 declare function useMIDIOutput(requestedDevice: number | string): {
-    device: MIDIOutput;
-    sendMIDICC: Function;
-    sendMIDIMessage: Function;
-    sendMIDINoteOn: Function;
-    sendMIDINoteOff: Function;
+    device: WebMidi.MIDIOutput;
+    sendMIDICC: (command: MIDICommand) => void;
+    sendMIDIMessage: (command: MIDICommand) => void;
+    sendMIDINoteOn: (command: MIDICommand) => void;
+    sendMIDINoteOff: (command: MIDICommand) => void;
 };
-declare function useMIDIInput(requestedDevice: number | string): MIDIInput;
-declare function useMIDIActions(device?: MIDIOutput): {
-    sendMIDICC: Function;
-    sendMIDIMessage: Function;
-    sendMIDINoteOn: Function;
-    sendMIDINoteOff: Function;
+declare function useMIDIInput(requestedDevice: number | string): WebMidi.MIDIInput | null;
+declare function useMIDIActions(device?: WebMidi.MIDIOutput): {
+    sendMIDICC: (args: MIDICommand) => void;
+    sendMIDIMessage: (args: MIDICommand) => void;
+    sendMIDINoteOn: (args: MIDICommand) => void;
+    sendMIDINoteOff: (args: MIDICommand) => void;
 };
-/**
- * @typedef MIDIOutput
- * @type {object}
- * @description Native js {@link https://developer.mozilla.org/en-US/docs/Web/API/MIDIOutput|MIDIOutput} object. Inherits properties from {@link https://developer.mozilla.org/en-US/docs/Web/API/MIDIPort|MIDIPort}
- * @property {string} id - the device id ("output" + it's order it the MIDIOutputList + 1)
- * @property {("open"|"closed"|"pending")} connection - connection status of the device,
- * eg: whether it is being used by the app
- * @property {string} manufacturer - the device manufacturer if available, or an empty string
- * @property {} onstatechange - DLSKJFJLSKDNFLKSNDFLKNSDLFKNSDLKFNLSKDFNLSKDNFL
- * @property {("connected"|"disconnected")} state - Indicates whether the device
- * is connected to the system
- * @property {"output"} type - the MIDIPort type (always output)
- * @property {string} version - version of the port, usually "1.0"
- */
 declare const index: {
     MIDIProvider: typeof MIDIProvider;
     useMIDI: typeof useMIDI;

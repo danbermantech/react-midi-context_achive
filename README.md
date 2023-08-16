@@ -1,4 +1,4 @@
-## react-midi-context.jsx
+## react-midi-context
 
 A React component for working with MIDI devices and sending MIDI messages.
 

@@ -1,18 +1,5 @@
 import React, { createContext, useReducer, useState, useEffect, useCallback, useMemo, useRef, useContext } from 'react';
 
-/**
- * @module MIDIContext
- */
-/**
- * @typedef {string} StatusByte
- * @property {number} noteOff - 0x8
- * @property {number} noteOn - 0x9
- * @property {number} afterTouch - 0xA
- * @property {number} controlChange - 0xB
- * @property {number} programChange - 0xC
- * @property {number} channelPressure - 0xD
- * @property {number} pitchWheel - 0xE
- */
 function translateTypeToStatusByte(type) {
     switch (type) {
         case ('noteOff'): return 0x80;
@@ -32,28 +19,18 @@ function sendMIDIMessage(props) {
     const statusBytes = firstStatusByte + (channel !== null && channel !== void 0 ? channel : 0);
     const msg = [statusBytes, pitch || (cc || 0), value || 0];
     if (device) {
-        if (device.constructor === Array) {
-            device.forEach((d) => d === null || d === void 0 ? void 0 : d.send(msg));
-            return `messages sent successfully to multiple outputs : ${msg}`;
+        try {
+            device.send(msg);
         }
-        if (!Array.isArray(device)) {
-            try {
-                device.send(msg);
-            }
-            catch (error) {
-                if (log)
-                    console.warn(error);
-                return 'an error occured.';
-            }
-            return `MIDI message successfully sent : ${msg}`;
+        catch (error) {
+            if (log)
+                console.warn(error);
+            return 'an error occured.';
         }
+        return `MIDI message successfully sent : ${msg}`;
     }
     return 'No device specified';
 }
-/**
- * @param {Event} event - a MIDI input event
- * @returns {Object} Object `{data: event.data, timeStamp: event.timeStamp, str: str}`
- */
 function onMIDIMessage(event) {
     let str = '';
     for (let i = 0; i < event.data.length; i += 1) {
@@ -88,25 +65,7 @@ async function closeMIDIInput(input) {
     await input.close();
     return input;
 }
-const MIDIContext = createContext({
-    initializeMIDI: function () { },
-    openMIDIInput: function () { },
-    onMIDIMessage: function () { },
-    sendMIDIMessage: function () { },
-    sendMIDICC: function () { },
-    sendMIDINoteOn: function () { },
-    sendMIDINoteOff: function () { },
-    midiAccess: {},
-    midiInputs: [],
-    midiOutputs: [],
-    connectedMIDIInputs: [],
-    addMIDIInput: function () { },
-    removeMIDIInput: function () { },
-    connectedMIDIOutputs: [],
-    setConnectedMIDIOutputs: function () { },
-    addMIDIOutput: function () { },
-    removeMIDIOutput: function () { },
-});
+const MIDIContext = createContext({});
 function useStoreData() {
     const store = useRef({ byDevice: {}, byChannel: {} });
     const get = useCallback((props) => {
@@ -161,7 +120,7 @@ function MIDIProvider(props) {
     const [connectedMIDIInputs, setConnectedMIDIInputs] = useReducer(reducer, []);
     const [connectedMIDIOutputs, setConnectedMIDIOutputs] = useReducer(reducer, []);
     const { get: getMIDIValue, set: setMIDIValue, subscribe } = useStoreData();
-    const [midiAccess, setMIDIAccess] = useState({});
+    const [midiAccess, setMIDIAccess] = useState(null);
     const [midiInputs, setMIDIInputs] = useState([]);
     const [midiOutputs, setMIDIOutputs] = useState([]);
     useEffect(() => {
@@ -171,33 +130,27 @@ function MIDIProvider(props) {
    * @function initializeMIDI
    * @returns {object} an object with midi inputs and outputs
    */
-    async function initializeMIDI(onError) {
+    const initializeMIDI = useCallback(async (onError) => {
         try {
             if (!('requestMIDIAccess' in navigator))
-                return Promise.reject(new Error('MIDI is not supported in this browser.'));
+                throw new Error('MIDI is not supported in this browser.');
             const tempMidiAccess = await navigator.requestMIDIAccess();
             setMIDIAccess(() => tempMidiAccess);
             //@ts-ignore
             setMIDIInputs(() => ([...tempMidiAccess.inputs].map((input) => (input[1]))));
-            //@ts-ignore
             setMIDIOutputs(() => ([...tempMidiAccess.outputs].map((output) => (output[1]))));
-            return { midiAccess, midiInputs, midiOutputs };
         }
         catch (error) {
             onError(error);
-            setMIDIAccess(() => { });
-            setMIDIInputs(() => ([]));
-            setMIDIOutputs(() => ([]));
-            return { midiAccess, midiInputs, midiOutputs };
         }
-    }
+    }, []);
     /**
      * @function addMIDIInput
      * @param {MIDIInput} input - the input to add
      */
     const addMIDIInput = useCallback(async (input, callback) => {
         try {
-            if (!('inputs' in midiAccess))
+            if (!midiAccess || !('inputs' in midiAccess))
                 throw new Error('inputs not available.');
             await openMIDIInput({ input, callback });
             setConnectedMIDIInputs({ type: 'add', value: input });
@@ -227,7 +180,7 @@ function MIDIProvider(props) {
      */
     const addMIDIOutput = useCallback((output) => {
         try {
-            if (!('outputs' in midiAccess))
+            if (!midiAccess || !('outputs' in midiAccess))
                 throw new Error('outputs not available.');
             // sendMIDINoteOff({device:output, pitch: 1, channel:1})
             setConnectedMIDIOutputs({ type: 'add', value: output });
@@ -237,10 +190,6 @@ function MIDIProvider(props) {
             return false;
         }
     }, [midiOutputs, midiAccess, connectedMIDIOutputs]);
-    /**
-     * @function removeMIDIOutput
-     * @param {MIDIOutput} output - the output to remove
-     */
     const removeMIDIOutput = useCallback((output) => {
         try {
             setConnectedMIDIOutputs({ type: 'remove', value: output });
@@ -250,13 +199,6 @@ function MIDIProvider(props) {
             return false;
         }
     }, [midiOutputs, midiAccess, connectedMIDIOutputs]);
-    /**
-     * @function sendMIDICC
-     * @param {number} args.channel - the channel to send the command on
-     * @param {number} args.cc - the CC# to send the command on
-     * @param {number} args.value = the value to send
-     * @param {MIDIOutput} args.device - the device to send the command on
-     */
     const sendMIDICC = useCallback((args) => {
         const { channel, cc, value, device, } = args;
         if (typeof (channel) !== 'number')
@@ -274,14 +216,6 @@ function MIDIProvider(props) {
             channel, cc, value, device,
         });
     }, [connectedMIDIOutputs, sendMIDIMessage]);
-    /**
-     * @function sendMIDINoteOn
-     * @param {number} args.channel - the channel to send the command on
-     * @param {number} args.pitch - the pitch to send
-     * @param {number} [args.value] = the value to send
-     * @param {number} [args.velocity] - alias of value
-     * @param {MIDIOutput} args.device - the device to send the command on
-     */
     const sendMIDINoteOn = useCallback((args) => {
         const { channel, pitch, value, device, velocity, } = args;
         if (typeof (channel) !== 'number')
@@ -296,12 +230,6 @@ function MIDIProvider(props) {
             channel, pitch, value: value !== null && value !== void 0 ? value : velocity, device, type: 'noteOn',
         });
     }, [connectedMIDIOutputs, sendMIDIMessage]);
-    /**
-     * @function sendMIDINoteOff
-     * @param {number} args.channel - the channel to send the command on
-     * @param {number} args.pitch - the pitch to send
-     * @param {MIDIOutput} args.device - the device to send the command on
-     */
     const sendMIDINoteOff = useCallback((args) => {
         const { channel, pitch, device, } = args;
         if (typeof (channel) !== 'number')
@@ -337,30 +265,42 @@ function MIDIProvider(props) {
     }), [midiInputs, midiOutputs, connectedMIDIInputs, connectedMIDIOutputs, midiAccess]);
     return (React.createElement(MIDIContext.Provider, { value: value }, children));
 }
-function useMIDIContext() {
-    return useContext(MIDIContext);
+// function useMIDIContext<T>(selector: SelectorFunction<T, T>): T;
+function useMIDIContext(selector) {
+    const latestSelectedStateRef = useRef();
+    const latestSelectedResultRef = useRef();
+    const valueFromContext = useContext(MIDIContext);
+    const selectedState = selector(valueFromContext);
+    if (selectedState !== latestSelectedStateRef.current) {
+        latestSelectedStateRef.current = selectedState;
+        latestSelectedResultRef.current = selectedState;
+    }
+    return latestSelectedResultRef.current;
 }
 function useMIDI(props) {
-    if (!props || !('channel' in props && 'cc' in props && 'device' in props))
-        return useMIDIContext();
-    const { channel, cc, device } = props;
-    const send = (value) => {
-        sendMIDIMessage({
-            channel, cc, value, device, type: 'cc'
-        });
-    };
-    return {
-        sendMIDIMessage: send,
-    };
+    const { channel, cc, device } = props !== null && props !== void 0 ? props : {};
+    if (typeof (channel) == 'number' && typeof (cc) == 'number') {
+        const send = (value) => {
+            sendMIDIMessage({
+                channel, cc, value, device, type: 'cc'
+            });
+        };
+        return {
+            sendMIDIMessage: send,
+        };
+    }
+    return useMIDIContext((cv) => cv);
 }
 function useMIDIOutput(requestedDevice) {
-    const { midiOutputs, sendMIDICC, sendMIDIMessage, sendMIDINoteOn, sendMIDINoteOff } = useMIDIContext();
-    let device;
-    if (typeof (requestedDevice) == 'number')
-        device = midiOutputs[requestedDevice];
-    else
-        device = midiOutputs.filter((device) => (device.name === requestedDevice))[0];
-    if (typeof (device) === 'undefined') {
+    const midiOutputs = useMIDIContext((cv) => cv.midiOutputs);
+    const sendMIDICC = useMIDIContext((cv) => cv.sendMIDICC);
+    const sendMIDIMessage = useMIDIContext((cv) => cv.sendMIDIMessage);
+    const sendMIDINoteOn = useMIDIContext((cv) => cv.sendMIDINoteOn);
+    const sendMIDINoteOff = useMIDIContext((cv) => cv.sendMIDINoteOff);
+    let device = (typeof (requestedDevice) == 'number')
+        ? midiOutputs[requestedDevice]
+        : midiOutputs.filter((device) => (device.name === requestedDevice))[0];
+    if (!device) {
         return {
             device,
             sendMIDICC: () => { },
@@ -386,7 +326,7 @@ function useMIDIOutput(requestedDevice) {
     };
 }
 function useMIDIInput(requestedDevice) {
-    const { midiInputs } = useMIDIContext();
+    const midiInputs = useMIDIContext(cv => cv.midiInputs);
     let device;
     try {
         if (typeof (requestedDevice) == 'number') {
@@ -402,21 +342,14 @@ function useMIDIInput(requestedDevice) {
         return device;
     }
     catch (err) {
-        return {
-            connection: 'disconnected',
-            id: 'err',
-            manufacturer: 'err',
-            name: 'err',
-            state: 'disconnected',
-            type: 'output',
-            open: () => { },
-            close: () => { },
-            version: '0',
-        };
+        return null;
     }
 }
 function useMIDIActions(device) {
-    const { sendMIDICC, sendMIDIMessage, sendMIDINoteOn, sendMIDINoteOff } = useMIDIContext();
+    const sendMIDICC = useMIDIContext((cv) => cv.sendMIDICC);
+    const sendMIDIMessage = useMIDIContext((cv) => cv.sendMIDIMessage);
+    const sendMIDINoteOn = useMIDIContext((cv) => cv.sendMIDINoteOn);
+    const sendMIDINoteOff = useMIDIContext((cv) => cv.sendMIDINoteOff);
     if (!device) {
         return { sendMIDICC, sendMIDIMessage, sendMIDINoteOn, sendMIDINoteOff };
     }
@@ -435,20 +368,6 @@ function useMIDIActions(device) {
         },
     };
 }
-/**
- * @typedef MIDIOutput
- * @type {object}
- * @description Native js {@link https://developer.mozilla.org/en-US/docs/Web/API/MIDIOutput|MIDIOutput} object. Inherits properties from {@link https://developer.mozilla.org/en-US/docs/Web/API/MIDIPort|MIDIPort}
- * @property {string} id - the device id ("output" + it's order it the MIDIOutputList + 1)
- * @property {("open"|"closed"|"pending")} connection - connection status of the device,
- * eg: whether it is being used by the app
- * @property {string} manufacturer - the device manufacturer if available, or an empty string
- * @property {} onstatechange - DLSKJFJLSKDNFLKSNDFLKNSDLFKNSDLKFNLSKDFNLSKDNFL
- * @property {("connected"|"disconnected")} state - Indicates whether the device
- * is connected to the system
- * @property {"output"} type - the MIDIPort type (always output)
- * @property {string} version - version of the port, usually "1.0"
- */
 const index = { MIDIProvider, useMIDI, useMIDIInput, useMIDIOutput, useMIDIActions };
 
 export { MIDIProvider, index as default, useMIDI, useMIDIActions, useMIDIInput, useMIDIOutput };
