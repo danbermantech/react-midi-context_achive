@@ -28,14 +28,8 @@ declare function MIDIProvider(props: {
     children: React.ReactNode;
     onError: (err: Error) => void;
 }): JSX.Element;
-/**
- * @function useMIDI
- * @param {object} props
- * @param {int} [props.channel]
- * @param {int} [props.cc]
- * @param {MIDIOutput} [props.device]
- * @returns {object}
- */
+type SelectorFunction<R> = (state: MIDIContextValue) => R;
+declare function useMIDIContext<R>(selector: SelectorFunction<R>): R;
 interface MIDIContextValue {
     initializeMIDI: (onError: (err: Error) => void) => void;
     openMIDIInput: (args: openMIDIInputArgs) => Promise<WebMidi.MIDIInput | Error>;
@@ -85,6 +79,7 @@ declare const index: {
     useMIDIInput: typeof useMIDIInput;
     useMIDIOutput: typeof useMIDIOutput;
     useMIDIActions: typeof useMIDIActions;
+    useMIDIContext: typeof useMIDIContext;
 };
 export default index;
-export { MIDIProvider, useMIDI, useMIDIInput, useMIDIOutput, useMIDIActions };
+export { MIDIProvider, useMIDI, useMIDIInput, useMIDIOutput, useMIDIActions, useMIDIContext };

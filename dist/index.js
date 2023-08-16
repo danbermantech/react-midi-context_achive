@@ -126,17 +126,12 @@ function MIDIProvider(props) {
     useEffect(() => {
         initializeMIDI(onError);
     }, []);
-    /**
-   * @function initializeMIDI
-   * @returns {object} an object with midi inputs and outputs
-   */
     const initializeMIDI = useCallback(async (onError) => {
         try {
             if (!('requestMIDIAccess' in navigator))
                 throw new Error('MIDI is not supported in this browser.');
             const tempMidiAccess = await navigator.requestMIDIAccess();
             setMIDIAccess(() => tempMidiAccess);
-            //@ts-ignore
             setMIDIInputs(() => ([...tempMidiAccess.inputs].map((input) => (input[1]))));
             setMIDIOutputs(() => ([...tempMidiAccess.outputs].map((output) => (output[1]))));
         }
@@ -144,10 +139,6 @@ function MIDIProvider(props) {
             onError(error);
         }
     }, []);
-    /**
-     * @function addMIDIInput
-     * @param {MIDIInput} input - the input to add
-     */
     const addMIDIInput = useCallback(async (input, callback) => {
         try {
             if (!midiAccess || !('inputs' in midiAccess))
@@ -160,10 +151,6 @@ function MIDIProvider(props) {
             return false;
         }
     }, [midiInputs, midiAccess, connectedMIDIInputs]);
-    /**
-     * @function removeMIDIInput
-     * @param {MIDIInput} input - the input to remove
-     */
     const removeMIDIInput = useCallback((input) => {
         try {
             closeMIDIInput(input);
@@ -174,15 +161,10 @@ function MIDIProvider(props) {
             return false;
         }
     }, [midiInputs, midiAccess, connectedMIDIInputs]);
-    /**
-     * @function addMIDIOutput
-     * @param {MIDIOutput} output - the output to add
-     */
     const addMIDIOutput = useCallback((output) => {
         try {
             if (!midiAccess || !('outputs' in midiAccess))
                 throw new Error('outputs not available.');
-            // sendMIDINoteOff({device:output, pitch: 1, channel:1})
             setConnectedMIDIOutputs({ type: 'add', value: output });
             return true;
         }
@@ -265,7 +247,6 @@ function MIDIProvider(props) {
     }), [midiInputs, midiOutputs, connectedMIDIInputs, connectedMIDIOutputs, midiAccess]);
     return (React.createElement(MIDIContext.Provider, { value: value }, children));
 }
-// function useMIDIContext<T>(selector: SelectorFunction<T, T>): T;
 function useMIDIContext(selector) {
     const latestSelectedStateRef = useRef();
     const latestSelectedResultRef = useRef();
@@ -368,7 +349,7 @@ function useMIDIActions(device) {
         },
     };
 }
-const index = { MIDIProvider, useMIDI, useMIDIInput, useMIDIOutput, useMIDIActions };
+const index = { MIDIProvider, useMIDI, useMIDIInput, useMIDIOutput, useMIDIActions, useMIDIContext };
 
-export { MIDIProvider, index as default, useMIDI, useMIDIActions, useMIDIInput, useMIDIOutput };
+export { MIDIProvider, index as default, useMIDI, useMIDIActions, useMIDIContext, useMIDIInput, useMIDIOutput };
 //# sourceMappingURL=index.js.map
